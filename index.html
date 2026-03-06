@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<title>채팅</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font: 14px sans-serif; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+.wrap { width: 700px; height: 340px; background: #fff; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.1); }
+.msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.msg { max-width: 65%; padding: 8px 12px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; background: #4a80f5; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.bottom { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; }
+input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; font-size: 13px; }
+button { padding: 8px 16px; border: none; border-radius: 10px; background: #4a80f5; color: #fff; cursor: pointer; font-size: 13px; transition: opacity .2s; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="msgs" id="msgs"></div>
+  <div class="bottom">
+    <input id="inp" placeholder="메시지 입력..."/>
+    <button id="sbtn">전송</button>
+  </div>
+</div>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, addDoc, onSnapshot, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const app = initializeApp({
+  apiKey: "AIzaSyCY22slfDTglAHV1P5iEVuEQ6XTslqZBWY",
+  authDomain: "kkungsil-3a843.firebaseapp.com",
+  projectId: "kkungsil-3a843",
+  storageBucket: "kkungsil-3a843.firebasestorage.app",
+  messagingSenderId: "696502895777",
+  appId: "1:696502895777:web:bc294e4fe19a5a0a131ce0"
+});
+
+const db = getFirestore(app);
+const col = collection(db, 'chat');
+let ready = true;
+
+// 실시간으로 메시지 불러오기
+onSnapshot(query(col, orderBy('time')), snap => {
+  const box = document.getElementById('msgs');
+  box.innerHTML = '';
+  snap.forEach(doc => {
+    const div = document.createElement('div');
+    div.className = 'msg';
+    div.textContent = doc.data().text;
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+});
+
+function send() {
+  if (!ready) return;
+  const inp = document.getElementById('inp');
+  const text = inp.value.trim();
+  if (!text) return;
+
+  addDoc(col, { text, time: Date.now() });
+  inp.value = '';
+
+  ready = false;
+  document.getElementById('sbtn').disabled = true;
+  setTimeout(() => {
+    ready = true;
+    document.getElementById('sbtn').disabled = false;
+    inp.focus();
+  }, 1000);
+}
+
+document.getElementById('sbtn').addEventListener('click', send);
+document.getElementById('inp').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); send(); }
+});
+</script>
+</body>
+</html>
