@@ -8,19 +8,21 @@
 body { font: 14px sans-serif; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; }
 .wrap { width: 700px; height: 340px; background: #fff; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.1); }
 .msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-.msg { max-width: 65%; padding: 8px 12px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; background: #4a80f5; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-.bottom { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; }
+.msg { max-width: 65%; padding: 8px 12px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.bottom { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; align-items: center; }
 input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; font-size: 13px; }
-button { padding: 8px 16px; border: none; border-radius: 10px; background: #4a80f5; color: #fff; cursor: pointer; font-size: 13px; transition: opacity .2s; }
-button:disabled { opacity: .4; cursor: not-allowed; }
+button#sbtn { padding: 8px 16px; border: none; border-radius: 10px; color: #fff; cursor: pointer; font-size: 13px; transition: opacity .2s; }
+button#sbtn:disabled { opacity: .4; cursor: not-allowed; }
+input[type="color"] { width: 32px; height: 32px; border: none; border-radius: 50%; padding: 0; cursor: pointer; background: none; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="msgs" id="msgs"></div>
   <div class="bottom">
+    <input type="color" id="color" value="#4a80f5" title="말풍선 색깔"/>
     <input id="inp" placeholder="메시지 입력..."/>
-    <button id="sbtn">전송</button>
+    <button id="sbtn" style="background:#4a80f5">전송</button>
   </div>
 </div>
 <script type="module">
@@ -40,7 +42,14 @@ const db = getFirestore(app);
 const col = collection(db, 'chat');
 let ready = true;
 
-// 실시간으로 메시지 불러오기
+const colorPicker = document.getElementById('color');
+const sbtn = document.getElementById('sbtn');
+
+// 색깔 바꾸면 전송 버튼도 같이 변경
+colorPicker.addEventListener('input', () => {
+  sbtn.style.background = colorPicker.value;
+});
+
 onSnapshot(query(col, orderBy('time')), snap => {
   const box = document.getElementById('msgs');
   box.innerHTML = '';
@@ -48,6 +57,7 @@ onSnapshot(query(col, orderBy('time')), snap => {
     const div = document.createElement('div');
     div.className = 'msg';
     div.textContent = doc.data().text;
+    div.style.background = doc.data().color || '#4a80f5';
     box.appendChild(div);
   });
   box.scrollTop = box.scrollHeight;
@@ -59,19 +69,19 @@ function send() {
   const text = inp.value.trim();
   if (!text) return;
 
-  addDoc(col, { text, time: Date.now() });
+  addDoc(col, { text, color: colorPicker.value, time: Date.now() });
   inp.value = '';
 
   ready = false;
-  document.getElementById('sbtn').disabled = true;
+  sbtn.disabled = true;
   setTimeout(() => {
     ready = true;
-    document.getElementById('sbtn').disabled = false;
+    sbtn.disabled = false;
     inp.focus();
   }, 1000);
 }
 
-document.getElementById('sbtn').addEventListener('click', send);
+sbtn.addEventListener('click', send);
 document.getElementById('inp').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); send(); }
 });
