@@ -8,28 +8,25 @@
 body { font: 14px sans-serif; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; }
 .wrap { width: 700px; height: 340px; background: #fff; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.1); }
 .msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; flex-direction: column; gap: 2px; }
+.row.me { align-items: flex-end; }
+.row.other { align-items: flex-start; }
 .msg { max-width: 65%; padding: 8px 12px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; }
-.msg.blue { background: #4a80f5; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-.msg.gray { background: #e9e9eb; color: #1c1c1e; align-self: flex-start; border-bottom-left-radius: 4px; }
-.bottom { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; align-items: center; }
-.color-btns { display: flex; gap: 6px; flex-shrink: 0; }
-.cbtn { width: 28px; height: 28px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; transition: border .15s; }
-.cbtn.active { border-color: #333; }
+.row.me .msg { background: #4a80f5; color: #fff; border-bottom-right-radius: 4px; }
+.row.other .msg { background: #e9e9eb; color: #1c1c1e; border-bottom-left-radius: 4px; }
+.time { font-size: 10px; color: #bbb; padding: 0 4px; }
+.bottom { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; }
 input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; font-size: 13px; }
-button#sbtn { padding: 8px 16px; border: none; border-radius: 10px; color: #fff; cursor: pointer; font-size: 13px; transition: background .2s, opacity .2s; }
-button#sbtn:disabled { opacity: .4; cursor: not-allowed; }
+button { padding: 8px 16px; border: none; border-radius: 10px; background: #4a80f5; color: #fff; cursor: pointer; font-size: 13px; transition: opacity .2s; }
+button:disabled { opacity: .4; cursor: not-allowed; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="msgs" id="msgs"></div>
   <div class="bottom">
-    <div class="color-btns">
-      <div class="cbtn active" id="btn-blue" style="background:#4a80f5"></div>
-      <div class="cbtn" id="btn-gray" style="background:#e9e9eb"></div>
-    </div>
     <input id="inp" placeholder="메시지 입력..."/>
-    <button id="sbtn" style="background:#4a80f5">전송</button>
+    <button id="sbtn">전송</button>
   </div>
 </div>
 <script type="module">
@@ -48,29 +45,74 @@ const app = initializeApp({
 const db = getFirestore(app);
 const col = collection(db, 'chat');
 let ready = true;
-let curColor = 'blue';
+let lastCount = 0;
 
-// onclick 대신 addEventListener로 연결
-document.getElementById('btn-blue').addEventListener('click', () => setColor('blue'));
-document.getElementById('btn-gray').addEventListener('click', () => setColor('gray'));
+// 브라우저 고유 ID (localStorage에 저장)
+let myId = localStorage.getItem('chat_uid');
+if (!myId) {
+  myId = crypto.randomUUID();
+  localStorage.setItem('chat_uid', myId);
+}
 
-function setColor(c) {
-  curColor = c;
-  document.getElementById('btn-blue').classList.toggle('active', c === 'blue');
-  document.getElementById('btn-gray').classList.toggle('active', c === 'gray');
-  document.getElementById('sbtn').style.background = c === 'blue' ? '#4a80f5' : '#9e9ea0';
+// 알람음
+function playBeep() {
+  const ctx = new AudioContext();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.connect(g); g.connect(ctx.destination);
+  o.frequency.value = 880;
+  o.type = 'sine';
+  g.gain.setValueAtTime(0.3, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+  o.start(); o.stop(ctx.currentTime + 0.4);
+}
+
+Notification.requestPermission();
+
+function notify(text) {
+  playBeep();
+  if (Notification.permission === 'granted') {
+    new Notification('새 메시지 💬', { body: text, silent: true });
+  }
+  let blink = setInterval(() => {
+    document.title = document.title === '채팅' ? '💬 새 메시지!' : '채팅';
+  }, 800);
+  setTimeout(() => { clearInterval(blink); document.title = '채팅'; }, 4000);
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 onSnapshot(query(col, orderBy('time')), snap => {
   const box = document.getElementById('msgs');
   box.innerHTML = '';
-  snap.forEach(doc => {
-    const div = document.createElement('div');
-    div.className = 'msg ' + (doc.data().color || 'blue');
-    div.textContent = doc.data().text;
-    box.appendChild(div);
+  snap.forEach(d => {
+    const data = d.data();
+    const isMe = data.uid === myId;
+    const row = document.createElement('div');
+    row.className = 'row ' + (isMe ? 'me' : 'other');
+
+    const msg = document.createElement('div');
+    msg.className = 'msg';
+    msg.textContent = data.text;
+
+    const time = document.createElement('div');
+    time.className = 'time';
+    time.textContent = formatTime(data.time);
+
+    row.appendChild(msg);
+    row.appendChild(time);
+    box.appendChild(row);
   });
   box.scrollTop = box.scrollHeight;
+
+  if (snap.size > lastCount) {
+    const last = snap.docs[snap.size - 1].data();
+    if (last.uid !== myId) notify(last.text);
+  }
+  lastCount = snap.size;
 });
 
 function send() {
@@ -79,7 +121,7 @@ function send() {
   const text = inp.value.trim();
   if (!text) return;
 
-  addDoc(col, { text, color: curColor, time: Date.now() });
+  addDoc(col, { text, uid: myId, time: Date.now() });
   inp.value = '';
 
   ready = false;
